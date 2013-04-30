@@ -71,6 +71,9 @@ module MoneyRails
           end
 
           define_method name do |*args|
+            if self.send("#{name}_money_is_invalid")
+              return self.instance_variable_get "@#{name}_money_validation_original"
+            end
             amount = send(subunit_name, *args)
             attr_currency = send("currency_for_#{name}")
 
@@ -96,6 +99,10 @@ module MoneyRails
                 money = value.is_a?(Money) ? value : value.to_money(send("currency_for_#{name}"))
               rescue NoMethodError
                 return nil
+              rescue Exception
+                instance_variable_set "@#{name}_money_is_invalid", true
+                instance_variable_set "@#{name}_money_validation_original", value
+                return nil
               end
             end
 
@@ -119,6 +126,10 @@ module MoneyRails
 
           define_method "#{name}_money_before_type_cast" do
             instance_variable_get "@#{name}_money_before_type_cast"
+          end
+
+          define_method "#{name}_money_is_invalid" do
+            instance_variable_get "@#{name}_money_is_invalid"
           end
 
           # Hook to ensure the reset of before_type_cast attr

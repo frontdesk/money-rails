@@ -2,12 +2,24 @@ module MoneyRails
   module ActiveModel
     class MoneyValidator < ::ActiveModel::Validations::NumericalityValidator
       def validate_each(record, attr, value)
+        valid_check = "#{attr}_money_is_invalid"
+        is_invalid = record.send(valid_check) if record.respond_to?(valid_check.to_sym)        
 
         # If subunit is not set then no need to validate as it is an
         # indicator that no assignment has been done onto the virtual
         # money field.
         subunit_attr = record.class.monetized_attributes[attr.to_sym]
-        return unless record.changed_attributes.keys.include? subunit_attr
+        return unless is_invalid || record.changed_attributes.keys.include?(subunit_attr)
+
+        currency = record.send("currency_for_#{attr}")
+        decimal_mark = I18n.t('number.currency.format.separator', default: currency.decimal_mark)
+        thousands_separator = I18n.t('number.currency.format.delimiter', default: currency.thousands_separator)
+        symbol = I18n.t('number.currency.format.unit', default: currency.symbol)
+
+        if is_invalid
+          record.errors.add(attr, I18n.t('errors.messages.invalid_currency',{ :thousands => thousands_separator, :decimal => decimal_mark }))
+          return
+        end
 
         # WARNING: Currently this is only defined in ActiveRecord extension!
         before_type_cast = "#{attr}_money_before_type_cast"
@@ -18,10 +30,6 @@ module MoneyRails
 
         if !raw_value.blank?
           # remove currency symbol, and negative sign
-          currency = record.send("currency_for_#{attr}")
-          decimal_mark = I18n.t('number.currency.format.separator', default: currency.decimal_mark)
-          thousands_separator = I18n.t('number.currency.format.delimiter', default: currency.thousands_separator)
-          symbol = I18n.t('number.currency.format.unit', default: currency.symbol)
 
           raw_value = raw_value.to_s.gsub(symbol, "")
           abs_raw_value = raw_value.gsub(/^-/, "")
